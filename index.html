@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Story Puzzle 3x3</title>
+    <style>
+        :root { --bg: #0f172a; --gold: #fbbf24; }
+        body { 
+            margin: 0; background: var(--bg); color: white; 
+            font-family: system-ui, sans-serif; overflow: hidden;
+            display: flex; flex-direction: column; align-items: center;
+        }
+        #header { padding: 20px; text-align: center; width: 100%; }
+        h2 { color: var(--gold); margin: 0 0 10px 0; font-size: 1.5rem; }
+        #story-text { font-style: italic; opacity: 0.9; min-height: 3em; padding: 0 10px; }
+        
+        #game-board { 
+            position: relative; width: 95vw; height: 95vw; 
+            max-width: 450px; max-height: 450px;
+            border: 4px solid #1e293b; border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        canvas { width: 100%; height: 100%; touch-action: none; border-radius: 8px; }
+        
+        .btn {
+            margin-top: 15px; padding: 12px 40px; background: var(--gold);
+            color: #000; border: none; border-radius: 30px; font-weight: bold;
+            display: none; font-size: 1.1rem; box-shadow: 0 4px 15px rgba(251, 191, 36, 0.4);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <h2 id="title">Глава 1</h2>
+        <p id="story-text">Загрузка...</p>
+    </div>
+
+    <div id="game-board">
+        <canvas id="puzzleCanvas"></canvas>
+    </div>
+
+    <button id="next-lvl" class="btn" onclick="startNextLevel()">Продолжить путь</button>
+
+<script>
+const canvas = document.getElementById('puzzleCanvas');
+const ctx = canvas.getContext('2d');
+const size = 3; // Теперь 3x3
+const totalTiles = size * size;
+const imgSize = 1000; // Базовый размер картинки
+const step = imgSize / size; // 333.33
+
+let tiles = [];
+let currentLevel = 0;
+let img = new Image();
+
+const levels = [
+    { title: "Глава 1: Древний Храм", text: "Стены начали дрожать. Соберите печать, чтобы остановить обвал.", img: "https://avatars.mds.yandex.net/i?id=798bb1e3c1ac2f12bd53b31dbefe45e2_l-4866714-images-thumbs&n=13" },
+    { title: "Глава 2: Забытые Тайны", text: "Свет упал на фреску. Что-то скрыто за этим изображением...", img: "https://avatars.mds.yandex.net/i?id=6d543e52d6c5c8372beb9592c604eb4f_l-12423030-images-thumbs&n=13" },
+    { title: "Глава 3: Выход", text: "Последняя преграда на пути к свободе. Поторопитесь!", img: "https://images.scrolller.com/pico/dragon-girl-gets-an-offering-3fpg1rqrzg-1000x1000.webp" }
+];
+
+function loadLevel(idx) {
+    document.getElementById('next-lvl').style.display = 'none';
+    const lvl = levels[idx];
+    document.getElementById('title').innerText = lvl.title;
+    document.getElementById('story-text').innerText = lvl.text;
+    
+    img.crossOrigin = "Anonymous";
+    img.src = lvl.img;
+    img.onload = () => {
+        canvas.width = imgSize;
+        canvas.height = imgSize;
+        tiles = Array.from({length: totalTiles}, (_, i) => i);
+        shuffle();
+        render();
+    };
+}
+
+function shuffle() {
+    // 150 случайных перемещений для сложности 3х3 достаточно
+    for (let i = 0; i < 150; i++) {
+        const emptyIdx = tiles.indexOf(8); // 8 - это последняя ячейка (пустая)
+        const neighbors = getNeighbors(emptyIdx);
+        const moveIdx = neighbors[Math.floor(Math.random() * neighbors.length)];
+        [tiles[emptyIdx], tiles[moveIdx]] = [tiles[moveIdx], tiles[emptyIdx]];
+    }
+}
+
+function getNeighbors(idx) {
+    const n = [];
+    const x = idx % size, y = Math.floor(idx / size);
+    if (x > 0) n.push(idx - 1);
+    if (x < size - 1) n.push(idx + 1);
+    if (y > 0) n.push(idx - size);
+    if (y < size - 1) n.push(idx + size);
+    return n;
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    tiles.forEach((val, i) => {
+        if (val === 8) return; // Пустота
+        
+        const dx = (i % size) * step;
+        const dy = Math.floor(i / size) * step;
+        const sx = (val % size) * step;
+        const sy = Math.floor(val / size) * step;
+
+        ctx.drawImage(img, sx, sy, step, step, dx, dy, step, step);
+        
+        // Сетка
+        ctx.strokeStyle = "rgba(0,0,0,0.2)";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(dx, dy, step, step);
+    });
+}
+
+canvas.addEventListener('pointerdown', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scale = imgSize / rect.width;
+    const x = Math.floor(((e.clientX - rect.left) * scale) / step);
+    const y = Math.floor(((e.clientY - rect.top) * scale) / step);
+    
+    const clickedIdx = y * size + x;
+    const emptyIdx = tiles.indexOf(8);
+
+    if (getNeighbors(emptyIdx).includes(clickedIdx)) {
+        [tiles[clickedIdx], tiles[emptyIdx]] = [tiles[emptyIdx], tiles[clickedIdx]];
+        render();
+        checkWin();
+    }
+});
+
+function checkWin() {
+    if (tiles.every((v, i) => v === i)) {
+        document.getElementById('story-text').innerText = "Отлично! Путь свободен.";
+        document.getElementById('next-lvl').style.display = 'block';
+    }
+}
+
+function startNextLevel() {
+    currentLevel++;
+    if (currentLevel < levels.length) loadLevel(currentLevel);
+    else {
+        document.getElementById('story-text').innerText = "Вы прошли всю историю!";
+        document.getElementById('next-lvl').style.display = 'none';
+    }
+}
+
+loadLevel(0);
+</script>
+</body>
+</html>
